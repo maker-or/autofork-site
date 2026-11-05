@@ -6,6 +6,8 @@ interface Props {
 
 const { title = 'software fork that maintain itself' } = Astro.props;
 const description = 'Fork open source projects, describe the changes you want, and let your fork keep up with upstream.';
+// This site's own share image (public/og.png), as an absolute URL.
+const ogImage = new URL('/og.png', Astro.site).href;
 ---
 
 <!doctype html>
@@ -19,7 +21,7 @@ const description = 'Fork open source projects, describe the changes you want, a
 		<meta property="og:site_name" content="autofork" />
 		<meta property="og:title" content={title} />
 		<meta property="og:description" content={description} />
-		<meta property="og:image" content="https://autofork.com/og.png" />
+		<meta property="og:image" content={ogImage} />
 		<meta property="og:image:type" content="image/png" />
 		<meta property="og:image:width" content="2400" />
 		<meta property="og:image:height" content="1260" />
@@ -27,7 +29,7 @@ const description = 'Fork open source projects, describe the changes you want, a
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:title" content={title} />
 		<meta name="twitter:description" content={description} />
-		<meta name="twitter:image" content="https://autofork.com/og.png" />
+		<meta name="twitter:image" content={ogImage} />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
 		<meta name="generator" content={Astro.generator} />
