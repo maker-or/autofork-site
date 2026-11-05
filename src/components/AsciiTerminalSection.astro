@@ -1,0 +1,730 @@
+---
+// AsciiTerminalSection.astro
+import rawFrames from '../data/asciiFrames.json';
+
+const initialFrame = rawFrames[0] || '';
+const totalFramesCount = rawFrames.length;
+const durationSec = (totalFramesCount / 12).toFixed(1);
+---
+
+<section class="ascii-section" id="terminal-section">
+	<div class="ascii-wrapper">
+		<div class="bento-card">
+			<!-- Header & Controls Column -->
+			<div class="card-sidebar">
+				<div class="badge-row">
+					<span class="status-pip" aria-hidden="true"></span>
+					<span class="badge-text">RUNTIME INTROSPECTION</span>
+				</div>
+
+				<h2 class="section-heading">
+					Watch code breathe<br />
+					in the terminal.
+				</h2>
+
+				<p class="section-desc">
+					Self-maintaining software observes, repairs, and renders state changes in real time.
+					Every frame is an immutable, character-level terminal projection of autonomous execution.
+				</p>
+
+				<!-- Interactive Controls -->
+				<div class="controls-panel">
+					<div class="playback-row">
+						<button class="ctrl-btn play-btn" id="ascii-play-btn" type="button" aria-label="Toggle playback">
+							<svg class="icon icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+								<path d="M8 5v14l11-7z" />
+							</svg>
+							<svg class="icon icon-pause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display: none;">
+								<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+							</svg>
+							<span class="btn-text" id="play-btn-label">Pause</span>
+						</button>
+
+						<div class="speed-selector" role="group" aria-label="Playback speed">
+							<button type="button" class="speed-btn" data-speed="0.5">0.5×</button>
+							<button type="button" class="speed-btn active" data-speed="1">1×</button>
+							<button type="button" class="speed-btn" data-speed="1.5">1.5×</button>
+							<button type="button" class="speed-btn" data-speed="2">2×</button>
+						</div>
+					</div>
+
+					<!-- Scrub slider -->
+					<div class="scrub-container">
+						<div class="scrub-meta">
+							<span class="scrub-time" id="ascii-current-time">00:00.0</span>
+							<span class="scrub-time scrub-total">/ 00:{durationSec}s</span>
+						</div>
+						<input
+							type="range"
+							class="scrub-slider"
+							id="ascii-scrubber"
+							min="0"
+							max={totalFramesCount - 1}
+							value="0"
+							aria-label="Seek animation frame"
+						/>
+					</div>
+
+					<!-- Color Themes -->
+					<div class="theme-selector">
+						<span class="selector-label">Phosphor Tone:</span>
+						<div class="theme-pills">
+							<button type="button" class="theme-pill active" data-theme="mono" title="BT.709 Monochrome">
+								<span class="dot dot-mono"></span> Mono
+							</button>
+							<button type="button" class="theme-pill" data-theme="amber" title="Amber CRT 3105">
+								<span class="dot dot-amber"></span> Amber
+							</button>
+							<button type="button" class="theme-pill" data-theme="emerald" title="VT100 Green Phosphor">
+								<span class="dot dot-emerald"></span> Matrix
+							</button>
+							<button type="button" class="theme-pill" data-theme="cyan" title="Cyan Phosphor">
+								<span class="dot dot-cyan"></span> Cyan
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Terminal Window Display -->
+			<div class="terminal-container">
+				<div class="terminal-window theme-mono" id="ascii-terminal">
+					<!-- Terminal Title Bar -->
+					<div class="terminal-bar">
+						<div class="window-dots" aria-hidden="true">
+							<span class="dot dot-red"></span>
+							<span class="dot dot-yellow"></span>
+							<span class="dot dot-green"></span>
+						</div>
+						<div class="window-title">
+							<span class="title-path">auto/runtime</span>
+							<span class="title-sep">/</span>
+							<span class="title-file">bad_apple.ascii</span>
+							<span class="title-dim">— 80×24</span>
+						</div>
+						<div class="window-stats">
+							<span class="live-indicator">
+								<span class="live-dot"></span>
+								<span class="live-label">RUNNING</span>
+							</span>
+							<span class="frame-counter" id="ascii-frame-stat">001 / {String(totalFramesCount).padStart(3, '0')}</span>
+						</div>
+					</div>
+
+					<!-- Terminal Screen Pre Area -->
+					<div class="terminal-viewport">
+						<pre class="ascii-canvas" id="ascii-screen" aria-label="ASCII art animation player">{initialFrame}</pre>
+						<div class="scanlines" aria-hidden="true"></div>
+						<div class="vignette" aria-hidden="true"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
+
+<script>
+	import rawFrames from '../data/asciiFrames.json';
+
+	const screenEl = document.getElementById('ascii-screen');
+	const playBtn = document.getElementById('ascii-play-btn');
+	const playLabel = document.getElementById('play-btn-label');
+	const playIcon = playBtn?.querySelector('.icon-play') as HTMLElement | null;
+	const pauseIcon = playBtn?.querySelector('.icon-pause') as HTMLElement | null;
+	const scrubber = document.getElementById('ascii-scrubber') as HTMLInputElement | null;
+	const timeEl = document.getElementById('ascii-current-time');
+	const frameStat = document.getElementById('ascii-frame-stat');
+	const terminalEl = document.getElementById('ascii-terminal');
+	const speedBtns = document.querySelectorAll('.speed-btn');
+	const themeBtns = document.querySelectorAll('.theme-pill');
+
+	const frames: string[] = rawFrames as string[];
+	const total = frames.length;
+	const baseFps = 12;
+
+	let currentFrameIndex = 0;
+	let isPlaying = true;
+	let speedMultiplier = 1;
+	let lastTimestamp = 0;
+	let accumulatedTime = 0;
+	let animationFrameId: number | null = null;
+
+	function formatTime(frameIdx: number): string {
+		const secs = frameIdx / baseFps;
+		const m = Math.floor(secs / 60);
+		const s = (secs % 60).toFixed(1);
+		return `${String(m).padStart(2, '0')}:${String(s).padStart(4, '0')}`;
+	}
+
+	function renderFrame(index: number) {
+		if (!screenEl || total === 0) return;
+		currentFrameIndex = (index + total) % total;
+		screenEl.textContent = frames[currentFrameIndex];
+
+		if (scrubber) {
+			scrubber.value = String(currentFrameIndex);
+		}
+		if (timeEl) {
+			timeEl.textContent = formatTime(currentFrameIndex);
+		}
+		if (frameStat) {
+			frameStat.textContent = `${String(currentFrameIndex + 1).padStart(3, '0')} / ${String(total).padStart(3, '0')}`;
+		}
+	}
+
+	function tick(now: number) {
+		if (!lastTimestamp) lastTimestamp = now;
+		const delta = (now - lastTimestamp) / 1000;
+		lastTimestamp = now;
+
+		if (isPlaying && total > 0) {
+			accumulatedTime += delta * speedMultiplier;
+			const frameInterval = 1 / baseFps;
+
+			if (accumulatedTime >= frameInterval) {
+				const advanceFrames = Math.floor(accumulatedTime / frameInterval);
+				accumulatedTime %= frameInterval;
+				renderFrame((currentFrameIndex + advanceFrames) % total);
+			}
+		}
+
+		animationFrameId = requestAnimationFrame(tick);
+	}
+
+	function setPlaying(play: boolean) {
+		isPlaying = play;
+		if (playLabel) playLabel.textContent = isPlaying ? 'Pause' : 'Play';
+		if (playIcon && pauseIcon) {
+			playIcon.style.display = isPlaying ? 'none' : 'block';
+			pauseIcon.style.display = isPlaying ? 'block' : 'none';
+		}
+	}
+
+	// Play/Pause button
+	playBtn?.addEventListener('click', () => {
+		setPlaying(!isPlaying);
+		lastTimestamp = 0;
+	});
+
+	// Scrubber slider
+	scrubber?.addEventListener('input', (e) => {
+		const target = e.target as HTMLInputElement;
+		const idx = parseInt(target.value, 10);
+		renderFrame(idx);
+	});
+
+	// Speed selector buttons
+	speedBtns.forEach((btn) => {
+		btn.addEventListener('click', () => {
+			speedBtns.forEach((b) => b.classList.remove('active'));
+			btn.classList.add('active');
+			const s = parseFloat(btn.getAttribute('data-speed') || '1');
+			speedMultiplier = s;
+		});
+	});
+
+	// Theme selector pills
+	themeBtns.forEach((btn) => {
+		btn.addEventListener('click', () => {
+			themeBtns.forEach((b) => b.classList.remove('active'));
+			btn.classList.add('active');
+			const theme = btn.getAttribute('data-theme') || 'mono';
+			if (terminalEl) {
+				terminalEl.classList.remove('theme-mono', 'theme-amber', 'theme-emerald', 'theme-cyan');
+				terminalEl.classList.add(`theme-${theme}`);
+			}
+		});
+	});
+
+	// Intersection Observer to auto-pause when out of view
+	const observer = new IntersectionObserver(
+		(entries) => {
+			entries.forEach((entry) => {
+				if (!entry.isIntersecting && isPlaying) {
+					// keep state flag but pause clock
+				}
+			});
+		},
+		{ threshold: 0.1 }
+	);
+
+	if (terminalEl) observer.observe(terminalEl);
+
+	// Start loop
+	setPlaying(true);
+	renderFrame(0);
+	animationFrameId = requestAnimationFrame(tick);
+</script>
+
+<style>
+	.ascii-section {
+		position: relative;
+		box-sizing: border-box;
+		width: 100%;
+		display: flex;
+		justify-content: center;
+		padding: 40px 24px 120px;
+	}
+
+	.ascii-wrapper {
+		width: 100%;
+		max-width: 1140px;
+	}
+
+	/* Bento Card */
+	.bento-card {
+		box-sizing: border-box;
+		display: grid;
+		grid-template-columns: minmax(320px, 390px) 1fr;
+		gap: 32px;
+		background: #181818;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 20px;
+		padding: clamp(24px, 3vw, 40px);
+		box-shadow:
+			0 1px 1px rgba(0, 0, 0, 0.5),
+			0 12px 32px -4px rgba(0, 0, 0, 0.5),
+			inset 0 1px 0 rgba(255, 255, 255, 0.08);
+		overflow: hidden;
+		backdrop-filter: blur(12px);
+	}
+
+	/* Left Sidebar */
+	.card-sidebar {
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+	}
+
+	.badge-row {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 4px 10px;
+		width: fit-content;
+		border-radius: 9999px;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		margin-bottom: 20px;
+	}
+
+	.status-pip {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #22c55e;
+		box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+		animation: pulse-pip 2s ease-in-out infinite;
+	}
+
+	@keyframes pulse-pip {
+		0%, 100% { opacity: 0.9; transform: scale(1); }
+		50% { opacity: 0.4; transform: scale(0.85); }
+	}
+
+	.badge-text {
+		color: #a3a19b;
+		font-family: 'Albert Sans', Inter, sans-serif;
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.section-heading {
+		margin: 0 0 16px;
+		font-family: 'Albert Sans', Inter, sans-serif;
+		font-size: clamp(24px, 2.5vw, 36px);
+		font-weight: 500;
+		line-height: 1.15;
+		letter-spacing: -0.035em;
+		color: #f4f2ee;
+	}
+
+	.section-desc {
+		margin: 0 0 28px;
+		color: #8a8884;
+		font-size: 14px;
+		line-height: 1.6;
+		max-width: 340px;
+	}
+
+	/* Controls Panel */
+	.controls-panel {
+		margin-top: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		padding-top: 20px;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	.playback-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+
+	.ctrl-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 7px 14px;
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		color: #f4f2ee;
+		font-size: 12px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.ctrl-btn:hover {
+		background: rgba(255, 255, 255, 0.14);
+		border-color: rgba(255, 255, 255, 0.2);
+	}
+
+	.ctrl-btn .icon {
+		width: 14px;
+		height: 14px;
+	}
+
+	.speed-selector {
+		display: inline-flex;
+		background: rgba(0, 0, 0, 0.35);
+		border-radius: 6px;
+		padding: 2px;
+		border: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	.speed-btn {
+		background: transparent;
+		border: none;
+		color: #7a7874;
+		font-size: 11px;
+		font-family: inherit;
+		font-weight: 500;
+		padding: 4px 8px;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.speed-btn:hover {
+		color: #e2dfd9;
+	}
+
+	.speed-btn.active {
+		background: rgba(255, 255, 255, 0.1);
+		color: #f4f2ee;
+	}
+
+	/* Scrub slider */
+	.scrub-container {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.scrub-meta {
+		display: flex;
+		justify-content: space-between;
+		font-size: 11px;
+		font-family: ui-monospace, monospace;
+		color: #8a8884;
+	}
+
+	.scrub-total {
+		color: #55534f;
+	}
+
+	.scrub-slider {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 100%;
+		height: 4px;
+		border-radius: 2px;
+		background: rgba(255, 255, 255, 0.1);
+		outline: none;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.scrub-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: #e3ded7;
+		cursor: pointer;
+		box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+		transition: transform 0.1s;
+	}
+
+	.scrub-slider::-webkit-slider-thumb:hover {
+		transform: scale(1.2);
+	}
+
+	/* Theme Selector */
+	.theme-selector {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.selector-label {
+		font-size: 11px;
+		color: #73716d;
+		font-weight: 450;
+	}
+
+	.theme-pills {
+		display: inline-flex;
+		gap: 4px;
+	}
+
+	.theme-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: transparent;
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		color: #7a7874;
+		font-size: 10px;
+		font-family: inherit;
+		font-weight: 500;
+		padding: 3px 7px;
+		border-radius: 5px;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.theme-pill .dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+	}
+
+	.dot-mono { background: #e3ded7; }
+	.dot-amber { background: #f59e0b; }
+	.dot-emerald { background: #10b981; }
+	.dot-cyan { background: #06b6d4; }
+
+	.theme-pill:hover {
+		border-color: rgba(255, 255, 255, 0.15);
+		color: #e2dfd9;
+	}
+
+	.theme-pill.active {
+		background: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0.2);
+		color: #f4f2ee;
+	}
+
+	/* --- Terminal Window on Right --- */
+	.terminal-container {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 0;
+	}
+
+	.terminal-window {
+		width: 100%;
+		border-radius: 12px;
+		background: #0d0d0e;
+		border: 1px solid rgba(255, 255, 255, 0.09);
+		box-shadow:
+			0 4px 20px -2px rgba(0, 0, 0, 0.6),
+			0 24px 48px -8px rgba(0, 0, 0, 0.7),
+			inset 0 1px 0 rgba(255, 255, 255, 0.07);
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		transition: border-color 0.3s ease, box-shadow 0.3s ease;
+	}
+
+	.terminal-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px 14px;
+		background: #141416;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		user-select: none;
+	}
+
+	.window-dots {
+		display: flex;
+		gap: 6px;
+		flex-shrink: 0;
+	}
+
+	.window-dots .dot {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+	}
+
+	.dot-red { background: #ff5f56; }
+	.dot-yellow { background: #ffbd2e; }
+	.dot-green { background: #27c93f; }
+
+	.window-title {
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: 11px;
+		color: #8c8983;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		padding: 0 8px;
+	}
+
+	.title-path { color: #5f5d58; }
+	.title-sep { color: #43413d; }
+	.title-file { color: #d6d3cc; }
+	.title-dim { color: #55534f; }
+
+	.window-stats {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		font-family: ui-monospace, 'SF Mono', monospace;
+		font-size: 10px;
+		color: #706e69;
+		flex-shrink: 0;
+	}
+
+	.live-indicator {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.live-dot {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background: #22c55e;
+		box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+	}
+
+	.live-label {
+		color: #22c55e;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+	}
+
+	.frame-counter {
+		color: #706e69;
+	}
+
+	/* Viewport & ASCII Canvas */
+	.terminal-viewport {
+		position: relative;
+		padding: 16px 14px 18px;
+		background: #080809;
+		overflow-x: auto;
+		overflow-y: hidden;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.ascii-canvas {
+		margin: 0;
+		font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Fira Code', 'DejaVu Sans Mono', monospace;
+		font-size: clamp(6.8px, 0.8vw, 11px);
+		line-height: 1.05;
+		letter-spacing: 0.08em;
+		white-space: pre;
+		user-select: text;
+		tab-size: 2;
+		transition: color 0.25s ease, text-shadow 0.25s ease;
+	}
+
+	/* Theme styles */
+	.theme-mono .ascii-canvas {
+		color: #e5e3de;
+		text-shadow: 0 0 2px rgba(255, 255, 255, 0.2);
+	}
+
+	.theme-amber .ascii-canvas {
+		color: #fbbf24;
+		text-shadow: 0 0 4px rgba(245, 158, 11, 0.45);
+	}
+	.theme-amber.terminal-window {
+		border-color: rgba(245, 158, 11, 0.2);
+		box-shadow: 0 0 28px rgba(245, 158, 11, 0.08);
+	}
+
+	.theme-emerald .ascii-canvas {
+		color: #34d399;
+		text-shadow: 0 0 4px rgba(16, 185, 129, 0.45);
+	}
+	.theme-emerald.terminal-window {
+		border-color: rgba(16, 185, 129, 0.2);
+		box-shadow: 0 0 28px rgba(16, 185, 129, 0.08);
+	}
+
+	.theme-cyan .ascii-canvas {
+		color: #38bdf8;
+		text-shadow: 0 0 4px rgba(6, 182, 212, 0.45);
+	}
+	.theme-cyan.terminal-window {
+		border-color: rgba(6, 182, 212, 0.2);
+		box-shadow: 0 0 28px rgba(6, 182, 212, 0.08);
+	}
+
+	/* Scanlines effect */
+	.scanlines {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: linear-gradient(
+			to bottom,
+			rgba(255, 255, 255, 0) 50%,
+			rgba(0, 0, 0, 0.28) 51%
+		);
+		background-size: 100% 4px;
+		opacity: 0.6;
+	}
+
+	/* CRT vignette */
+	.vignette {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			circle at 50% 50%,
+			transparent 65%,
+			rgba(0, 0, 0, 0.45) 100%
+		);
+	}
+
+	/* Responsive */
+	@media (max-width: 900px) {
+		.bento-card {
+			grid-template-columns: 1fr;
+			gap: 28px;
+		}
+
+		.section-desc {
+			max-width: 100%;
+		}
+
+		.terminal-viewport {
+			padding: 12px 10px;
+		}
+
+		.ascii-canvas {
+			font-size: clamp(5.5px, 1.4vw, 9.5px);
+		}
+	}
+</style>

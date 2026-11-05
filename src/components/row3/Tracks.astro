@@ -1,0 +1,181 @@
+---
+// Tracks.astro — row 3, variant D. A perspective floor of glowing tracks. Far off
+// they run together; near you they split into upstream and your fork, and both
+// follow the same curves as upstream rolls towards you. Releases arrive as pulses
+// of light down the middle pair; click to send one.
+---
+
+<div class="tracks">
+	<canvas class="tracks-canvas" aria-hidden="true"></canvas>
+</div>
+
+<style>
+	.tracks { position: absolute; inset: 0; }
+	.tracks-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; touch-action: pan-y; }
+</style>
+
+<script>
+	const Z_MAX = 30;            // how far the floor runs, in track units
+	const Z0 = 1.4;              // camera distance; smaller = stronger perspective
+	const SAMPLES = 90;
+	const WAVE_SPEED = 0.8;      // how fast upstream's curves roll towards you
+	const PULSE_SPEED = 8;       // track units per second for a release
+	const AUTO_MS = 6500;
+
+	type Track = { side: number; lane: number; main: boolean };
+	type Pulse = { start: number };
+
+	const smooth = (a: number, b: number, x: number) => {
+		const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+		return t * t * (3 - 2 * t);
+	};
+
+	for (const root of document.querySelectorAll<HTMLElement>('.tracks')) {
+		const canvas = root.querySelector<HTMLCanvasElement>('.tracks-canvas')!;
+		const ctx = canvas.getContext('2d')!;
+		const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+		// Upstream and your fork in the middle, other forks fading out to the sides.
+		const tracks: Track[] = [
+			{ side: -1, lane: 0, main: true },
+			{ side: 1, lane: 0, main: true },
+			...[1, 2, 3].flatMap((lane) => [
+				{ side: -1, lane, main: false },
+				{ side: 1, lane, main: false },
+			]),
+		];
+		const pulses: Pulse[] = [];
+
+		let w = 0, h = 0, dpr = 1;
+		let cx = 0;
+		let nextAt = 0;
+		let visible = false;
+		let frame = 0;
+		let clock = 0;
+		let last = performance.now();
+
+		const layout = () => {
+			const rect = canvas.getBoundingClientRect();
+			dpr = Math.min(devicePixelRatio || 1, 2);
+			w = rect.width;
+			h = rect.height;
+			canvas.width = Math.round(w * dpr);
+			canvas.height = Math.round(h * dpr);
+			cx = w / 2;
+		};
+
+		// Every track shares upstream's wave; the middle pair splits apart near you.
+		const laneX = (tr: Track, z: number, t: number) => {
+			const wave = 0.7 * smooth(0.8, 6, z) * Math.sin(z * 0.55 - t * WAVE_SPEED);
+			const lateral = tr.main ? 0.5 + 0.95 * Math.exp(-z / 3.2) : 1.7 + tr.lane * 1.45;
+			return tr.side * lateral + wave;
+		};
+
+		const project = (x: number, z: number) => {
+			const k = Z0 / (z + Z0);
+			const unit = w * 0.17;
+			const horizon = -h * 0.06;
+			return { x: cx + x * unit * k, y: horizon + (h * 1.06 - horizon) * k, k };
+		};
+
+		const zAt = (i: number) => (i / SAMPLES) ** 2 * Z_MAX;
+
+		const ship = (now: number) => {
+			pulses.push({ start: now });
+			nextAt = now + AUTO_MS;
+		};
+
+		const pulseZ = (p: Pulse, now: number) => Z_MAX - ((now - p.start) / 1000) * PULSE_SPEED;
+
+		const draw = (now: number) => {
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			ctx.clearRect(0, 0, w, h);
+			const t = clock;
+			const width0 = Math.max(10, w * 0.02);
+			const live = pulses.map((p) => pulseZ(p, now));
+
+			for (const tr of tracks) {
+				const base = tr.main ? 0.95 : 0.42 / tr.lane ** 0.35;
+
+				// Sample the track once: centre line, width and how brightly each part glows.
+				const pts: { x: number; y: number; hw: number; lum: number; fog: number }[] = [];
+				// A release's light cuts through the distance fog so you can follow it all the way down.
+				let prevX = laneX(tr, 0, t);
+				for (let i = 0; i <= SAMPLES; i++) {
+					const z = zAt(i);
+					const x = laneX(tr, z, t);
+					const p = project(x, z);
+					// Bends catch the light, like the reference; distance fades into the floor.
+					const bend = i === 0 ? 0 : Math.min(1, (Math.abs(x - prevX) / Math.max(0.001, z - zAt(i - 1))) * 1.6);
+					let pulse = 0;
+					if (tr.main) for (const pz of live) pulse = Math.max(pulse, 1 - Math.min(1, Math.abs(z - pz) / (1.3 + z * 0.1)));
+					pts.push({
+						x: p.x,
+						y: p.y,
+						hw: (width0 * p.k) / 2,
+						lum: Math.min(1, base * (0.38 + bend * 0.62) + pulse * 1.2),
+						fog: Math.max(Math.exp(-z / 14), pulse * 0.9) * (1 - smooth(Z_MAX * 0.75, Z_MAX, z)),
+					});
+					prevX = x;
+				}
+
+				// Draw it as a ribbon of quads that share edges, so nothing overlaps into beads:
+				// a soft halo, the tube, then a brighter core down the middle.
+				const ribbon = (scale: number, alpha: (q: (typeof pts)[number]) => number) => {
+					for (let i = 1; i < pts.length; i++) {
+						const a = pts[i - 1];
+						const b = pts[i];
+						const dx = b.x - a.x;
+						const dy = b.y - a.y;
+						const len = Math.hypot(dx, dy) || 1;
+						const nx = -dy / len;
+						const ny = dx / len;
+						const ha = a.hw * scale;
+						const hb = b.hw * scale;
+						ctx.fillStyle = `rgba(244,242,238,${alpha(b)})`;
+						ctx.beginPath();
+						ctx.moveTo(a.x - nx * ha, a.y - ny * ha);
+						ctx.lineTo(a.x + nx * ha, a.y + ny * ha);
+						ctx.lineTo(b.x + nx * hb, b.y + ny * hb);
+						ctx.lineTo(b.x - nx * hb, b.y - ny * hb);
+						ctx.closePath();
+						ctx.fill();
+					}
+				};
+
+				if (tr.main) ribbon(2.6, (q) => q.fog * q.lum * 0.07);
+				ribbon(1, (q) => q.fog * q.lum * 0.55);
+				ribbon(0.42, (q) => q.fog * q.lum * 0.75);
+			}
+		};
+
+		const step = (now: number) => {
+			const dt = Math.min(0.05, (now - last) / 1000);
+			last = now;
+			clock += dt;
+			if (now >= nextAt) ship(now);
+
+			while (pulses.length && pulseZ(pulses[0], now) < -2) pulses.shift();
+
+			draw(now);
+			frame = visible ? requestAnimationFrame(step) : 0;
+		};
+
+		const wake = () => {
+			if (reduceMotion || !visible) { draw(performance.now()); return; }
+			if (!frame) { last = performance.now(); frame = requestAnimationFrame(step); }
+		};
+
+		new ResizeObserver(() => { layout(); draw(performance.now()); }).observe(canvas);
+		new IntersectionObserver(([entry]) => {
+			visible = entry.isIntersecting;
+			if (visible && !nextAt) nextAt = performance.now() + 1200;
+			wake();
+		}, { threshold: 0.3 }).observe(canvas);
+
+		canvas.addEventListener('pointerdown', () => {
+			if (reduceMotion) return;
+			ship(performance.now());
+		});
+	}
+</script>

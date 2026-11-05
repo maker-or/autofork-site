@@ -1,0 +1,214 @@
+---
+// ForkField.astro — row 1 visual. Every star is a starred repo; clicking one forks it
+// into a bright star of your own, and the counter keeps score.
+---
+
+<div class="fork-field">
+	<canvas class="fork-canvas" aria-hidden="true"></canvas>
+	<div class="fork-label fork-hint" aria-live="polite">
+		<span class="fork-count" hidden>
+			<number-flow class="fork-number"></number-flow>
+			<span class="fork-unit">repos forked</span>
+		</span>
+	</div>
+</div>
+
+<style>
+	.fork-field { position:absolute; inset:0; }
+	.fork-canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:pan-y; }
+	.fork-label {
+		position:absolute; display:flex; align-items:center; gap:7px; pointer-events:none;
+		font-family:Inter, -apple-system, BlinkMacSystemFont, sans-serif; font-size:12px; letter-spacing:0.01em;
+		color:#6f6f6e; background:#141414; padding:5px 8px; border-radius:4px; transition:color 0.4s ease;
+	}
+	.fork-hint { right:12px; bottom:12px; z-index:1; }
+	.fork-count { display:inline-flex; align-items:baseline; gap:6px; }
+	.fork-count[hidden] { display:none; }
+	.fork-number { color:#f4f2ee; font-size:20px; font-weight:500; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+</style>
+
+<script>
+	import 'number-flow';
+	import type NumberFlow from 'number-flow';
+	import { starPath, makeRand, easeOut, makeSprite, drawSprite } from '../scripts/stars';
+
+	const SPACING = 46;          // px between stars
+	const DRIFT = 14;            // px per second, left → right
+	const HOVER_R = 110;
+	const FORK_MS = 1100;
+	const DIM = [210, 210, 210];
+	const BRIGHT = [244, 242, 238];
+
+	type Star = { x: number; y: number; size: number; base: number; tw: number; twSpeed: number; glow: number; pulse: number };
+	type Fork = { ox: number; oy: number; tx: number; ty: number; born: number; trail: { x: number; y: number }[] };
+
+	for (const root of document.querySelectorAll<HTMLElement>('.fork-field')) {
+		const canvas = root.querySelector<HTMLCanvasElement>('.fork-canvas')!;
+		const count = root.querySelector<HTMLElement>('.fork-count')!;
+		const unit = root.querySelector<HTMLElement>('.fork-unit')!;
+		const number = root.querySelector<NumberFlow>('.fork-number')!;
+		let forked = 0;
+		number.update(0);
+		const ctx = canvas.getContext('2d')!;
+		const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+		let w = 0, h = 0, dpr = 1;
+		let sprite = makeSprite(1);
+		let stars: Star[] = [];
+		let forks: Fork[] = [];
+		let drift = 0;
+		let pointer: { x: number; y: number } | null = null;
+		let last = performance.now();
+		let visible = false;
+		let frame = 0;
+
+		const layout = () => {
+			const rect = canvas.getBoundingClientRect();
+			const nextDpr = Math.min(devicePixelRatio || 1, 2);
+			if (nextDpr !== dpr || !w) sprite = makeSprite(nextDpr);
+			dpr = nextDpr;
+			// Keep every fork, scaled to the new panel size.
+			if (w && h) {
+				const sx = rect.width / w;
+				const sy = rect.height / h;
+				for (const f of forks) { f.ox *= sx; f.tx *= sx; f.oy *= sy; f.ty *= sy; }
+			}
+			w = rect.width;
+			h = rect.height;
+			canvas.width = Math.round(w * dpr);
+			canvas.height = Math.round(h * dpr);
+			const rand = makeRand(1337);
+			const cols = Math.ceil(w / SPACING) + 1;
+			const rows = Math.max(2, Math.round(h / SPACING));
+			stars = [];
+			for (let r = 0; r < rows; r++) {
+				for (let c = 0; c < cols; c++) {
+					stars.push({
+						x: c * SPACING + (rand() - 0.5) * 16,
+						y: ((r + 0.5) / rows) * h + (rand() - 0.5) * 10,
+						size: 4.5 + rand() * 2,
+						base: 0.16 + rand() * 0.14,
+						tw: rand() < 0.4 ? rand() * Math.PI * 2 : -1,
+						twSpeed: 0.6 + rand() * 0.9,
+						glow: 0,
+						pulse: 0,
+					});
+				}
+			}
+		};
+
+		// Stars wrap across the drift, so their on-screen x depends on time.
+		const span = () => Math.ceil(w / SPACING + 1) * SPACING;
+		const screenX = (s: Star) => ((s.x + drift) % span() + span()) % span() - SPACING / 2;
+
+		const nearestStar = (x: number, y: number) => {
+			let best: Star | null = null;
+			let bestD = Infinity;
+			for (const s of stars) {
+				const d = Math.hypot(screenX(s) - x, s.y - y);
+				if (d < bestD) { bestD = d; best = s; }
+			}
+			return best;
+		};
+
+		const fork = (x: number, y: number) => {
+			const from = nearestStar(x, y);
+			if (!from) return;
+			const ox = screenX(from);
+			const oy = from.y;
+			// Fly off somewhere nearby with room to breathe, staying inside the panel.
+			const angle = Math.random() * Math.PI * 2;
+			const dist = 70 + Math.random() * 50;
+			const tx = Math.min(w - 30, Math.max(30, ox + Math.cos(angle) * dist));
+			let ty = Math.min(h - 40, Math.max(40, oy + Math.sin(angle) * dist));
+			// Don't land behind the counter.
+			const label = count.parentElement!.getBoundingClientRect();
+			const box = canvas.getBoundingClientRect();
+			if (tx > label.left - box.left - 16 && ty > label.top - box.top - 16) ty = label.top - box.top - 16 - Math.random() * 30;
+			from.pulse = 1;
+			forks.push({ ox, oy, tx, ty, born: performance.now() - (reduceMotion ? FORK_MS : 0), trail: [] });
+			forked++;
+			count.hidden = false;
+			unit.textContent = forked === 1 ? 'repo forked' : 'repos forked';
+			number.update(forked);
+			wake();
+		};
+
+		const draw = (now: number) => {
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			ctx.clearRect(0, 0, w, h);
+			const t = now / 1000;
+
+			for (const s of stars) {
+				const x = screenX(s);
+				let target = 0;
+				if (pointer) {
+					const d = Math.hypot(x - pointer.x, s.y - pointer.y);
+					if (d < HOVER_R) target = (1 - d / HOVER_R) ** 1.5;
+				}
+				s.glow += (target - s.glow) * 0.15;
+				s.pulse *= 0.94;
+				const twinkle = s.tw >= 0 ? (Math.sin(t * s.twSpeed + s.tw) + 1) / 2 : 0;
+				const alpha = Math.min(1, s.base + twinkle * 0.45 + s.glow * 0.8 + s.pulse);
+				const c = s.glow;
+				ctx.fillStyle = `rgba(${DIM[0] + (BRIGHT[0] - DIM[0]) * c},${DIM[1] + (BRIGHT[1] - DIM[1]) * c},${DIM[2] + (BRIGHT[2] - DIM[2]) * c},${alpha})`;
+				starPath(ctx, x, s.y, s.size * (1 + s.glow * 0.5 + s.pulse * 0.8));
+				ctx.fill();
+			}
+
+			for (const f of forks) {
+				const age = Math.max(0, now - f.born);
+				const p = easeOut(Math.min(1, age / FORK_MS));
+				// Curve away from the parent instead of flying straight.
+				const mx = (f.ox + f.tx) / 2 + (f.ty - f.oy) * 0.35;
+				const my = (f.oy + f.ty) / 2 - (f.tx - f.ox) * 0.35;
+				const x = (1 - p) ** 2 * f.ox + 2 * (1 - p) * p * mx + p * p * f.tx;
+				const y = (1 - p) ** 2 * f.oy + 2 * (1 - p) * p * my + p * p * f.ty;
+				if (p < 1) f.trail.push({ x, y });
+				if (f.trail.length > 18 || (p === 1 && f.trail.length)) f.trail.shift();
+
+				for (let i = 1; i < f.trail.length; i++) {
+					const a = i / f.trail.length;
+					ctx.strokeStyle = `rgba(244,242,238,${a * 0.5})`;
+					ctx.lineWidth = a * 2;
+					ctx.beginPath();
+					ctx.moveTo(f.trail[i - 1].x, f.trail[i - 1].y);
+					ctx.lineTo(f.trail[i].x, f.trail[i].y);
+					ctx.stroke();
+				}
+
+				const breathe = p === 1 ? Math.sin(t * 1.6 + f.born) * 0.06 : 0;
+				drawSprite(ctx, sprite, x, y, (5 + p * 6) * (1 + breathe));
+			}
+		};
+
+		const step = (now: number) => {
+			const dt = Math.min(0.05, (now - last) / 1000);
+			last = now;
+			if (!reduceMotion) drift += DRIFT * dt;
+			draw(now);
+			frame = visible && !reduceMotion ? requestAnimationFrame(step) : 0;
+		};
+
+		const wake = () => {
+			if (reduceMotion) { draw(performance.now()); return; }
+			if (!frame && visible) { last = performance.now(); frame = requestAnimationFrame(step); }
+		};
+
+		const local = (e: PointerEvent) => {
+			const rect = canvas.getBoundingClientRect();
+			return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+		};
+
+		new ResizeObserver(() => { layout(); draw(performance.now()); }).observe(canvas);
+		new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) wake(); }).observe(canvas);
+
+		canvas.addEventListener('pointermove', (e) => { pointer = local(e); if (reduceMotion) draw(performance.now()); });
+		canvas.addEventListener('pointerleave', () => { pointer = null; if (reduceMotion) draw(performance.now()); });
+		canvas.addEventListener('pointerdown', (e) => {
+			const at = local(e);
+			fork(at.x, at.y);
+			if (e.pointerType !== 'mouse') pointer = null;
+		});
+	}
+</script>

@@ -1,0 +1,35 @@
+---
+// Well.astro — the box the row 3 visuals sit in. Plain, so each visual sits straight
+// on the row's gradient. Shared label styles live here too.
+---
+
+<div class="well"><slot /></div>
+
+<style>
+	.well {
+		position: relative;
+		flex: 1;
+		min-height: 340px;
+		overflow: hidden;
+	}
+
+	.well :global(.well-label) {
+		position: absolute;
+		z-index: 6;
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		pointer-events: none;
+		color: #6f6f6e;
+		font: 12px/1.4 Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+		letter-spacing: 0.01em;
+	}
+
+	.well :global(.well-num) {
+		color: #f4f2ee;
+		font-size: 20px;
+		font-weight: 500;
+		letter-spacing: -0.02em;
+		font-variant-numeric: tabular-nums;
+	}
+</style>

@@ -1,0 +1,202 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Split the wordmark SVG into individual pixels so each one can move on its own.
+const raw = fs.readFileSync(path.join(process.cwd(), 'public/footer.svg'), 'utf8');
+const HIDDEN = new Set(['#141414', '#161616']);
+
+const pixels = [...raw.matchAll(/<path d="([^"]+)" fill="([^"]+)"/g)]
+	.filter(([, , fill]) => !HIDDEN.has(fill.toUpperCase()))
+	.map(([, d, fill]) => {
+		const xs: number[] = [];
+		const ys: number[] = [];
+		let cmd = '';
+		let i = 0;
+		for (const tok of d.match(/[A-Za-z]|-?\d*\.?\d+/g) ?? []) {
+			if (/[A-Za-z]/.test(tok)) { cmd = tok; i = 0; continue; }
+			const n = parseFloat(tok);
+			if (cmd === 'H') xs.push(n);
+			else if (cmd === 'V') ys.push(n);
+			else (i++ % 2 === 0 ? xs : ys).push(n);
+		}
+		const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+		const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+		return { d, fill, cx: +cx.toFixed(2), cy: +cy.toFixed(2) };
+	});
+
+// Artwork bounds plus room for pixels to fly into.
+const view = { x: 160, y: 236, w: 1144, h: 342 };
+---
+
+<footer class="site-footer">
+	<a class="source-btn" href="https://github.com/AVGVSTVS96/autofork" target="_blank" rel="noopener" aria-label="autofork source code on GitHub">
+		<span class="seg seg-knob" aria-hidden="true">
+			<svg viewBox="0 0 16 16"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z" /></svg>
+		</span>
+		<span class="seg seg-label">GitHub</span>
+	</a>
+	<canvas
+		class="wordmark"
+		role="img"
+		aria-label="autofork"
+		data-pixels={JSON.stringify(pixels)}
+		data-view={JSON.stringify(view)}
+		style={`aspect-ratio:${view.w} / ${view.h}`}
+	></canvas>
+</footer>
+
+<style>
+	.site-footer { width:100%; display:flex; flex-direction:column; align-items:center; gap:48px; padding:24px 24px 24px; background:#141414; box-sizing:border-box; }
+
+	/* Same pressed-in pill as the hero's fork button: GitHub mark in the knob, label beside it */
+	.source-btn {
+		--h: 44px;
+		display: inline-flex;
+		gap: 4px;
+		text-decoration: none;
+		transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), filter 0.2s ease;
+	}
+	.source-btn:hover { filter: brightness(1.03); transform: translateY(-1px); }
+	.source-btn:active { transform: translateY(1px); filter: brightness(0.98); }
+	.source-btn:focus-visible { outline: 2px solid rgba(255,255,255,0.5); outline-offset: 5px; border-radius: 999px; }
+	.seg {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: var(--h);
+		box-sizing: border-box;
+		background: linear-gradient(180deg, #d4d2ce 0%, #cbc9c5 45%, #c5c3bf 100%);
+		box-shadow:
+			0 -0.5px 0.5px rgba(255,255,255,0.75),
+			inset 0 calc(var(--h) * 0.18) calc(var(--h) * 0.22) calc(var(--h) * -0.02) rgba(0,0,0,0.52),
+			inset calc(var(--h) * 0.08) 0 calc(var(--h) * 0.15) -1px rgba(0,0,0,0.35),
+			inset 0 -1.5px 3px rgba(255,255,255,0.28),
+			0 3px 10px rgba(0,0,0,0.45),
+			0 1px 2px rgba(0,0,0,0.3);
+		color: #5c5b58;
+	}
+	.seg::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 1px 0.5px rgba(255,255,255,0.95); }
+	.seg-knob { width: calc(var(--h) * 0.88); border-radius: 999px 6px 6px 999px; }
+	.seg-knob svg { width: calc(var(--h) * 0.4); height: calc(var(--h) * 0.4); filter: drop-shadow(0 1px 0 rgba(255,255,255,0.55)); }
+	.seg-label {
+		padding: 0 calc(var(--h) * 0.42) 0 calc(var(--h) * 0.36);
+		border-radius: 6px 999px 999px 6px;
+		font: 400 calc(var(--h) * 0.35)/1 'Albert Sans', Inter, -apple-system, sans-serif;
+		letter-spacing: -0.022em;
+	}
+	.wordmark { width:100%; max-width:1144px; height:auto; display:block; cursor:crosshair; touch-action:pan-y; }
+</style>
+
+<script>
+	type Pixel = { d: string; fill: string; cx: number; cy: number };
+
+	const RADIUS = 90;        // pointer influence, in artwork units
+	const PUSH = 1.6;         // hover repulsion strength
+	const SPRING = 0.05;      // pull back toward home
+	const DAMPING = 0.88;
+	const BURST_RADIUS = 320;
+	const BURST = 26;
+	const GLOW = [244, 242, 238];
+
+	const hexToRgb = (hex: string) => {
+		const n = parseInt(hex.slice(1), 16);
+		return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+	};
+
+	for (const canvas of document.querySelectorAll<HTMLCanvasElement>('canvas.wordmark')) {
+		const ctx = canvas.getContext('2d')!;
+		const view = JSON.parse(canvas.dataset.view!);
+		const particles = (JSON.parse(canvas.dataset.pixels!) as Pixel[]).map((p) => ({
+			...p,
+			path: new Path2D(p.d),
+			rgb: hexToRgb(p.fill),
+			ox: 0, oy: 0, vx: 0, vy: 0, glow: 0,
+		}));
+
+		const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+		let pointer: { x: number; y: number } | null = null;
+		let scale = 1;
+		let frame = 0;
+
+		const resize = () => {
+			const dpr = Math.min(devicePixelRatio || 1, 2);
+			const rect = canvas.getBoundingClientRect();
+			canvas.width = Math.round(rect.width * dpr);
+			canvas.height = Math.round(rect.height * dpr);
+			scale = canvas.width / view.w;
+			draw();
+		};
+
+		const draw = () => {
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			for (const p of particles) {
+				const [r, g, b] = p.rgb;
+				const t = p.glow;
+				ctx.fillStyle = `rgb(${r + (GLOW[0] - r) * t},${g + (GLOW[1] - g) * t},${b + (GLOW[2] - b) * t})`;
+				ctx.setTransform(scale, 0, 0, scale, (p.ox - view.x) * scale, (p.oy - view.y) * scale);
+				ctx.fill(p.path);
+			}
+		};
+
+		const step = () => {
+			let moving = false;
+			for (const p of particles) {
+				let target = 0;
+				if (pointer) {
+					const dx = p.cx + p.ox - pointer.x;
+					const dy = p.cy + p.oy - pointer.y;
+					const dist = Math.hypot(dx, dy) || 0.001;
+					if (dist < RADIUS) {
+						const f = (1 - dist / RADIUS) ** 2 * PUSH;
+						p.vx += (dx / dist) * f;
+						p.vy += (dy / dist) * f;
+						target = 1 - dist / RADIUS;
+					}
+				}
+				p.vx = (p.vx - p.ox * SPRING) * DAMPING;
+				p.vy = (p.vy - p.oy * SPRING) * DAMPING;
+				p.ox += p.vx;
+				p.oy += p.vy;
+				p.glow += (Math.max(target, Math.min(1, Math.hypot(p.vx, p.vy) / 6)) - p.glow) * 0.18;
+				if (Math.abs(p.ox) + Math.abs(p.oy) + Math.abs(p.vx) + Math.abs(p.vy) + p.glow > 0.02) moving = true;
+				else { p.ox = p.oy = p.vx = p.vy = p.glow = 0; }
+			}
+			draw();
+			// Sleep once everything has settled and nobody is pointing at it.
+			frame = moving || pointer ? requestAnimationFrame(step) : 0;
+		};
+
+		const wake = () => { if (!frame) frame = requestAnimationFrame(step); };
+
+		const toView = (e: PointerEvent) => {
+			const rect = canvas.getBoundingClientRect();
+			return {
+				x: ((e.clientX - rect.left) / rect.width) * view.w + view.x,
+				y: ((e.clientY - rect.top) / rect.height) * view.h + view.y,
+			};
+		};
+
+		new ResizeObserver(resize).observe(canvas);
+		if (reduceMotion) continue;
+
+		canvas.addEventListener('pointermove', (e) => { pointer = toView(e); wake(); });
+		canvas.addEventListener('pointerleave', () => { pointer = null; });
+		canvas.addEventListener('pointerdown', (e) => {
+			const at = toView(e);
+			for (const p of particles) {
+				const dx = p.cx + p.ox - at.x;
+				const dy = p.cy + p.oy - at.y;
+				const dist = Math.hypot(dx, dy) || 0.001;
+				if (dist > BURST_RADIUS) continue;
+				const f = (1 - dist / BURST_RADIUS) * BURST * (0.7 + Math.random() * 0.6);
+				p.vx += (dx / dist) * f + (Math.random() - 0.5) * 4;
+				p.vy += (dy / dist) * f + (Math.random() - 0.5) * 4;
+			}
+			if (e.pointerType !== 'mouse') pointer = null;
+			wake();
+		});
+	}
+</script>

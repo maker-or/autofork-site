@@ -1,23 +1,81 @@
+---
+import Footer from '../components/Footer.astro';
+interface Props {
+	title?: string;
+}
+
+const { title = 'software fork that maintain itself' } = Astro.props;
+const description = 'Fork open source projects, describe the changes you want, and let your fork keep up with upstream.';
+---
+
 <!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#141414" />
+		<meta name="description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="autofork" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content="https://autofork.com/og.png" />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:image:width" content="2400" />
+		<meta property="og:image:height" content="1260" />
+		<meta property="og:image:alt" content="A hand-drawn mark representing software that maintains itself." />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content="https://autofork.com/og.png" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
+		<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@350;400;450&family=Inter:wght@400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+		<title>{title}</title>
 	</head>
 	<body>
 		<slot />
+		<Footer />
+		<div class="grain" aria-hidden="true"></div>
 	</body>
 </html>
 
 <style>
+	:root {
+		color-scheme: dark;
+	}
+
 	html,
 	body {
 		margin: 0;
 		width: 100%;
-		height: 100%;
+		min-height: 100%;
+	}
+
+	body {
+		background: #141414;
+		color: #f3f1ed;
+		font-family:
+			Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+			sans-serif;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		text-rendering: optimizeLegibility;
+	}
+
+	.grain {
+		position: fixed;
+		inset: 0;
+		z-index: 10;
+		pointer-events: none;
+		opacity: 0.035;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+		background-size: 160px 160px;
 	}
 </style>

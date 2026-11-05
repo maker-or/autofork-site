@@ -1,0 +1,379 @@
+---
+// ChangePicker.astro — a stacked wheel of change ideas for row 2. It's a native
+// scroll area with scroll-snap, so wheel, trackpad and touch all feel like normal
+// scrolling; the script only reads scrollTop to draw the stacked cards. Click the
+// centred card to add it; the last card is a field for your own words.
+// Sends patch:add / patch:focus to OrbitField and listens for patch:select.
+interface Props {
+	changes: string[];
+}
+
+const { changes } = Astro.props;
+const START = Math.min(2, changes.length);
+---
+
+<div class="picker" data-start={START}>
+	<div class="picker-stage" tabindex="0" role="listbox" aria-label="Changes for your fork">
+		<div class="picker-track">
+			{changes.map((change, i) => (
+				<div class="picker-item" role="option" data-change={change} data-variant={i % 5} aria-pressed={i === 0 ? 'true' : 'false'}>
+					<div class="picker-card">
+						<span class="picker-dot" aria-hidden="true"></span>
+						<span class="picker-text">{change}</span>
+						<span class="picker-state" aria-hidden="true"></span>
+					</div>
+				</div>
+			))}
+			<div class="picker-item picker-own" role="option" aria-label="Write your own change">
+				<div class="picker-card">
+					<span class="picker-dot" aria-hidden="true"></span>
+					<input class="picker-input" type="text" maxlength="48" placeholder="write your own" aria-label="Write your own change" tabindex="-1" />
+					<span class="picker-state" aria-hidden="true"></span>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+	/* Registered so the scroll-driven animation can tween it */
+	@property --fade {
+		syntax: '<number>';
+		inherits: true;
+		initial-value: 1;
+	}
+
+	.picker {
+		--step: 52px;
+		width: 100%;
+		max-width: 420px;
+		margin-top: 4px;
+	}
+
+	/* A real scroll area: momentum and snapping come from the browser */
+	.picker-stage {
+		position: relative;
+		height: calc(var(--step) * 5);
+		overflow-y: auto;
+		overscroll-behavior-y: auto;
+		scroll-snap-type: y mandatory;
+		scrollbar-width: none;
+		outline: none;
+		/* room for the cards' shadows, which a scroll area would otherwise clip */
+		margin: 0 -16px;
+		padding: 0 16px;
+		-webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+		mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+	}
+
+	.picker-stage::-webkit-scrollbar {
+		display: none;
+	}
+
+	.picker-track {
+		padding: calc(var(--step) * 2) 0;
+	}
+
+	.picker-item {
+		--fade: 1;
+		position: relative;
+		height: var(--step);
+		scroll-snap-align: center;
+	}
+
+	.picker-card {
+		position: absolute;
+		top: 50%;
+		left: 0;
+		right: 0;
+		height: 60px;
+		margin-top: -30px;
+		display: grid;
+		grid-template-columns: 26px 1fr auto;
+		align-items: center;
+		gap: 16px;
+		padding: 0 20px;
+		box-sizing: border-box;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 14px;
+		background: linear-gradient(180deg, #232322 0%, #1b1b1a 100%);
+		box-shadow:
+			0 14px 30px rgba(0, 0, 0, 0.55),
+			0 2px 6px rgba(0, 0, 0, 0.35),
+			inset 0 1px 0 rgba(255, 255, 255, 0.06);
+		cursor: pointer;
+		user-select: none;
+		-webkit-user-select: none;
+		will-change: transform;
+	}
+
+	/*
+	 * The stack is driven by each card's own position in the scroll area, so it
+	 * moves in lockstep with native scrolling. d = steps from centre (+3 entering
+	 * below, -3 leaving above); cards are pulled towards the centre, shrink, dim
+	 * and sink behind as |d| grows. Browsers without scroll timelines get the same
+	 * values from the script instead.
+	 */
+	@supports (animation-timeline: view()) {
+		.picker-item {
+			view-timeline: --picker-card block;
+		}
+
+		.picker-card {
+			animation: picker-stack linear both;
+			animation-timeline: --picker-card;
+			animation-range: cover 0% cover 100%;
+		}
+	}
+
+	@keyframes picker-stack {
+		0% { transform: translate3d(0, -23.4px, 0) scale(0.745); --fade: 0.28; z-index: 70; opacity: 0; }
+		12% { opacity: 1; }
+		16.667% { transform: translate3d(0, -10.4px, 0) scale(0.83); --fade: 0.28; z-index: 80; }
+		33.333% { transform: translate3d(0, -2.6px, 0) scale(0.915); --fade: 0.64; z-index: 90; }
+		50% { transform: translate3d(0, 0, 0) scale(1); --fade: 1; z-index: 100; }
+		66.667% { transform: translate3d(0, 2.6px, 0) scale(0.915); --fade: 0.64; z-index: 90; }
+		83.333% { transform: translate3d(0, 10.4px, 0) scale(0.83); --fade: 0.28; z-index: 80; }
+		88% { opacity: 1; }
+		100% { transform: translate3d(0, 23.4px, 0) scale(0.745); --fade: 0.28; z-index: 70; opacity: 0; }
+	}
+
+	.picker-text,
+	.picker-input {
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		color: rgba(244, 242, 238, calc(0.12 + var(--fade) * 0.58));
+		font: 350 21px/1.2 'Albert Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+		letter-spacing: -0.025em;
+	}
+
+	.picker-item.is-active .picker-text,
+	.picker-item.is-active .picker-input {
+		color: #f4f2ee;
+		font-weight: 500;
+	}
+
+	/* Concentric dots, shaded like the hero mark */
+	.picker-dot {
+		--outer: #918e89;
+		--inner: #f2eee8;
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: radial-gradient(circle, var(--inner) 0 5px, var(--outer) 5.5px);
+		opacity: calc(0.35 + var(--fade) * 0.65);
+		transition: box-shadow 0.3s ease;
+	}
+
+	.picker-item[data-variant='0'] .picker-dot { --outer: #e3ded7; --inner: #514f4c; }
+	.picker-item[data-variant='1'] .picker-dot { --outer: #514f4c; --inner: #e3ded7; }
+	.picker-item[data-variant='2'] .picker-dot { --outer: #918e89; --inner: #f2eee8; }
+	.picker-item[data-variant='3'] .picker-dot { --outer: #403e3b; --inner: #a3a09b; }
+	.picker-item[data-variant='4'] .picker-dot { --outer: #a3a09b; --inner: #403e3b; }
+
+	.picker-own .picker-dot {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px #5a5958;
+	}
+
+	/* In your fork: the dot gets a halo, like a star in orbit */
+	.picker-item[aria-pressed='true'] .picker-dot {
+		box-shadow: 0 0 0 4px rgba(244, 242, 238, 0.08), 0 0 14px rgba(244, 242, 238, 0.25);
+	}
+
+	/* Fades in only as a card reaches the centre, so nothing pops when the active card changes */
+	.picker-state {
+		color: #6f6f6e;
+		font: 12px/1 Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+		letter-spacing: 0.01em;
+		opacity: clamp(0, (var(--fade) - 0.82) / 0.18, 1);
+	}
+
+	.picker-state::before { content: 'add'; }
+	.picker-own .picker-state::before { content: 'enter ↵'; }
+
+	.picker-item[aria-pressed='true'] .picker-state {
+		opacity: var(--fade);
+	}
+
+	.picker-item[aria-pressed='true'] .picker-state::before { content: 'added'; color: #b5b3af; }
+
+	.picker-item.is-lit .picker-text {
+		color: #f4f2ee;
+		font-weight: 500;
+	}
+
+	.picker-item[aria-pressed='true'] .picker-card,
+	.picker-own .picker-card {
+		cursor: default;
+	}
+
+	.picker-input {
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		caret-color: #f4f2ee;
+		outline: none;
+		cursor: text;
+		user-select: text;
+		-webkit-user-select: text;
+	}
+
+	.picker-input::placeholder {
+		color: rgba(111, 111, 110, calc(0.4 + var(--fade) * 0.6));
+	}
+
+	.picker-stage:focus-visible .picker-item.is-active .picker-card {
+		outline: 2px solid rgba(255, 255, 255, 0.4);
+		outline-offset: 3px;
+	}
+
+</style>
+
+<script>
+	const AUTO_MS = 2800;        // idle demo: advance until someone touches it
+
+	for (const picker of document.querySelectorAll<HTMLElement>('.picker')) {
+		const row = picker.closest('.bento-row') ?? picker;
+		const stage = picker.querySelector<HTMLElement>('.picker-stage')!;
+		const track = picker.querySelector<HTMLElement>('.picker-track')!;
+		const own = picker.querySelector<HTMLElement>('.picker-own')!;
+		const input = own.querySelector<HTMLInputElement>('.picker-input')!;
+		const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+		// With scroll timelines, CSS draws the stack; the script only tracks the active card.
+		const cssDriven = CSS.supports('animation-timeline: view()');
+		let items = [...track.querySelectorAll<HTMLElement>('.picker-item')];
+		let active: HTMLElement | null = null;
+		let frame = 0;
+		let auto = 0;
+		let touched = false;
+
+		const step = () => items[0]?.offsetHeight || 52;
+		const indexNow = () => Math.max(0, Math.min(items.length - 1, Math.round(stage.scrollTop / step())));
+
+		const scrollToIndex = (i: number, smooth = true) => {
+			stage.scrollTo({ top: i * step(), behavior: smooth && !reduceMotion ? 'smooth' : 'auto' });
+		};
+
+		// Stack the cards: squeeze them towards the centre, shrink and fade with distance.
+		const render = () => {
+			frame = 0;
+			const s = step();
+			const pos = stage.scrollTop / s;
+			if (!cssDriven) items.forEach((item, i) => {
+				const d = i - pos;
+				const ad = Math.abs(d);
+				const card = item.firstElementChild as HTMLElement;
+				const pull = -d * s * Math.min(ad, 3) * 0.05;
+				card.style.transform = `translate3d(0, ${pull}px, 0) scale(${1 - Math.min(ad, 3) * 0.085})`;
+				item.style.zIndex = String(100 - Math.round(ad * 10));
+				item.style.visibility = ad > 2.7 ? 'hidden' : '';
+				item.style.setProperty('--fade', String(1 - Math.min(ad, 2) * 0.36));
+			});
+
+			const next = items[indexNow()] ?? null;
+			if (next !== active) {
+				active?.classList.remove('is-active');
+				active?.setAttribute('aria-selected', 'false');
+				active = next;
+				active?.classList.add('is-active');
+				active?.setAttribute('aria-selected', 'true');
+				input.tabIndex = active === own ? 0 : -1;
+				if (active !== own && document.activeElement === input) stage.focus({ preventScroll: true });
+				row.dispatchEvent(new CustomEvent('patch:focus', { detail: { el: active } }));
+			}
+		};
+
+		const queueRender = () => { if (!frame) frame = requestAnimationFrame(render); };
+
+		const stopAuto = () => {
+			touched = true;
+			clearInterval(auto);
+		};
+
+		const add = (item: HTMLElement) => {
+			if (item === own) { input.focus({ preventScroll: true }); return; }
+			if (item.getAttribute('aria-pressed') === 'true') return;
+			item.setAttribute('aria-pressed', 'true');
+			row.dispatchEvent(new CustomEvent('patch:add', { detail: { text: item.dataset.change, el: item } }));
+		};
+
+		// Your own words become a card just above the field, centred where you typed.
+		const addOwn = () => {
+			const text = input.value.trim();
+			if (!text) return;
+			const template = items.find((i) => i !== own)!;
+			const item = template.cloneNode(true) as HTMLElement;
+			item.classList.remove('is-active', 'is-lit');
+			item.dataset.change = text;
+			item.dataset.variant = String((items.length - 1) % 5);
+			item.setAttribute('aria-pressed', 'true');
+			item.querySelector('.picker-text')!.textContent = text;
+			track.insertBefore(item, own);
+			items = [...track.querySelectorAll<HTMLElement>('.picker-item')];
+			input.value = '';
+			active = null;
+			render();
+			stage.focus({ preventScroll: true });
+			row.dispatchEvent(new CustomEvent('patch:add', { detail: { text, el: item } }));
+		};
+
+		stage.addEventListener('scroll', queueRender, { passive: true });
+
+		// Click a card behind to bring it forward; click the front card to add it.
+		stage.addEventListener('click', (e) => {
+			if (e.target === input) return;
+			const item = (e.target as HTMLElement).closest<HTMLElement>('.picker-item');
+			if (!item) return;
+			stopAuto();
+			if (item === active) add(item);
+			else scrollToIndex(items.indexOf(item));
+		});
+
+		stage.addEventListener('keydown', (e) => {
+			if (e.target === input) {
+				if (e.key === 'Enter') { e.preventDefault(); addOwn(); }
+				else if (e.key === 'ArrowUp') { e.preventDefault(); stage.focus({ preventScroll: true }); scrollToIndex(indexNow() - 1); }
+				return;
+			}
+			if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+				e.preventDefault();
+				stopAuto();
+				scrollToIndex(indexNow() + (e.key === 'ArrowDown' ? 1 : -1));
+			} else if ((e.key === 'Enter' || e.key === ' ') && active) {
+				e.preventDefault();
+				add(active);
+			}
+		});
+
+		for (const type of ['wheel', 'touchstart', 'pointerdown', 'focusin']) {
+			stage.addEventListener(type, stopAuto, { passive: true });
+		}
+		picker.addEventListener('pointerenter', stopAuto);
+
+		row.addEventListener('patch:select', (e) => {
+			stopAuto();
+			scrollToIndex(items.indexOf((e as CustomEvent).detail.el));
+		});
+
+		// Idle demo: step through the ideas so it's obvious the stack moves.
+		if (!reduceMotion) {
+			new IntersectionObserver(([entry]) => {
+				clearInterval(auto);
+				if (entry.isIntersecting && !touched) {
+					auto = window.setInterval(() => {
+						const i = indexNow();
+						scrollToIndex(i >= items.length - 2 ? 0 : i + 1);
+					}, AUTO_MS);
+				}
+			}, { threshold: 0.6 }).observe(picker);
+		}
+
+		scrollToIndex(Number(picker.dataset.start) || 0, false);
+		render();
+	}
+</script>

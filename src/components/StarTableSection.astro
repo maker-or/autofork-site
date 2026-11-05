@@ -1,0 +1,245 @@
+---
+// StarTableSection.astro
+import ForkField from './ForkField.astro';
+import OrbitField from './OrbitField.astro';
+import ChangePicker from './ChangePicker.astro';
+import Well from './row3/Well.astro';
+import Tracks from './row3/Tracks.astro';
+
+/* Row 2 — changes people actually asked for (from autofork.com) */
+const changes = [
+	'always show context usage',
+	'window title shows the thread',
+	'every pane shows its ID',
+	'one bot runs many sessions',
+	'agents share files with me',
+	'it calls my own assistant',
+	'I can suggest edits',
+];
+---
+
+<section class="star-table-section" id="fork-section">
+	<div class="bento-wrapper">
+		<!-- Row 1: text left, straight drifting stars right -->
+		<div class="bento-row row-fork">
+			<div class="panel-text">
+				<h2 class="section-title">
+					Fork any open<br />
+					source repo
+				</h2>
+				<p class="section-line">
+					Pick a project. One click, and your own copy lives in your GitHub.
+				</p>
+			</div>
+
+			<div class="panel-visual">
+				<ForkField />
+			</div>
+		</div>
+
+		<!-- Row 2: circular stars left, text right -->
+		<div class="bento-row row-orbit">
+			<div class="panel-visual">
+				<OrbitField />
+			</div>
+
+			<div class="panel-text">
+				<h2 class="section-title">
+					Make it yours,<br />
+					in plain words
+				</h2>
+				<p class="section-line">
+					Say what you'd change, in your own words. Each one is kept in a PATCH.md, not a diff.
+				</p>
+
+				<ChangePicker changes={changes} />
+			</div>
+		</div>
+
+		<!-- Row 3: copy flowing into a recessed visual, on a soft gradient -->
+		<div class="bento-row row-stack">
+			<div class="panel-text panel-text-top">
+				<h2 class="section-title">
+					Upstream bends.<br />
+					Your fork bends with it.
+				</h2>
+				<p class="section-line">
+					Your fork follows every upstream release, with your changes preserved. If an update breaks one, an agent rebuilds it from your words. No rebases.
+				</p>
+			</div>
+
+			<div class="panel-visual panel-visual-bottom">
+				<Well>
+					<Tracks />
+				</Well>
+			</div>
+		</div>
+
+	</div>
+</section>
+
+<style>
+	.star-table-section {
+		width: 100%;
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 40px 24px 120px;
+		box-sizing: border-box;
+	}
+
+	.bento-wrapper {
+		width: 100%;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		box-sizing: border-box;
+		background: #141414;
+	}
+
+	.bento-row {
+		display: grid;
+		grid-template-columns: minmax(280px, 38.2%) 1fr;
+		min-height: 310px;
+		box-sizing: border-box;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+		background: #141414;
+	}
+
+	.panel-text {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 18px;
+		background: #141414;
+		box-sizing: border-box;
+	}
+
+	.row-fork .panel-text {
+		padding: 56px 44px 56px 56px;
+		border-right: 1px solid rgba(255, 255, 255, 0.12);
+	}
+
+	.row-orbit .panel-text {
+		padding: 56px 56px 56px 44px;
+	}
+
+	.section-title {
+		margin: 0;
+		color: #f7f6f2;
+		font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+		font-size: clamp(28px, 2.9vw, 42px);
+		font-weight: 400;
+		line-height: 1.18;
+		letter-spacing: -0.028em;
+	}
+
+	.section-line {
+		margin: 0;
+		max-width: 34ch;
+		color: #8a8987;
+		font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+		font-size: 15px;
+		line-height: 1.55;
+		letter-spacing: -0.005em;
+	}
+
+	.section-line em {
+		font-style: normal;
+		color: #d8d6d2;
+	}
+
+	.row-stack .section-line {
+		max-width: 62ch;
+	}
+
+	.row-fork .panel-visual {
+		padding: 0;
+		min-height: 310px;
+	}
+
+	.panel-visual {
+		position: relative;
+		display: flex;
+		align-items: stretch;
+		justify-content: center;
+		background: #141414;
+		padding: 10px;
+		box-sizing: border-box;
+		overflow: hidden;
+	}
+
+	.row-orbit .panel-visual {
+		border-right: 1px solid rgba(255, 255, 255, 0.12);
+		padding: 0;
+		min-height: 400px;
+	}
+
+
+	/* Row 3 — one piece on a gradient that rises softly out of the page background */
+	.bento-row.row-stack {
+		position: relative;
+		display: block;
+		min-height: 0;
+		background:
+			radial-gradient(130% 90% at 50% 118%, rgba(40, 40, 43, 0.9) 0%, rgba(40, 40, 43, 0) 70%),
+			linear-gradient(180deg, #141414 0%, #151516 45%, #1c1c1e 80%, #222224 100%);
+	}
+
+	.row-stack .panel-text,
+	.row-stack .panel-visual {
+		background: transparent;
+	}
+
+
+	/* Row 3 reads as one piece: no divider, the copy flows into the recessed well */
+	.row-stack .panel-text-top {
+		border-right: none;
+		padding: 48px 56px 32px;
+	}
+
+	/* The tracks run edge to edge, fading into the gradient */
+	.row-stack .panel-visual-bottom {
+		display: flex;
+		border-right: none;
+		padding: 0;
+		min-height: 460px;
+	}
+
+	@media (max-width: 860px) {
+		.bento-row {
+			grid-template-columns: 1fr;
+		}
+
+		.row-fork .panel-text,
+		.row-orbit .panel-text {
+			padding: 40px 28px;
+			border-right: none;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+		}
+
+		.row-orbit .panel-text {
+			order: -1;
+		}
+
+		.row-orbit .panel-visual {
+			border-right: none;
+		}
+
+		.row-stack .panel-text-top {
+			padding: 40px 28px 24px;
+		}
+
+		.row-stack .panel-visual-bottom {
+			min-height: 360px;
+		}
+
+	}
+
+	@media (max-width: 560px) {
+		.star-table-section {
+			padding: 20px 16px 80px;
+		}
+
+		.section-title {
+			font-size: 26px;
+		}
+	}
+</style>
