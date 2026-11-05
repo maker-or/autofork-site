@@ -1,0 +1,129 @@
+---
+// PillButton.astro — the pressed-in two-part pill from the hero: a round knob on the
+// left (fill it via the "knob" slot) and a label on the right. Used by the hero's
+// "fork it" and the footer's GitHub link so both are exactly the same button.
+interface Props {
+	href: string;
+	label: string;
+	class?: string;
+	style?: string;
+	'aria-label'?: string;
+	external?: boolean;
+}
+
+const { href, label, class: className, style, external = false, 'aria-label': ariaLabel } = Astro.props;
+---
+
+<a
+	class:list={['pill-btn', className]}
+	href={href}
+	style={style}
+	aria-label={ariaLabel}
+	target={external ? '_blank' : undefined}
+	rel={external ? 'noopener' : undefined}
+>
+	<span class="segment segment-knob" aria-hidden="true"><slot name="knob" /></span>
+	<span class="segment segment-label">
+		<span class="text">{label}</span>
+	</span>
+</a>
+
+<style>
+	.pill-btn {
+		--btn-h: clamp(38px, 3.6vw, 54px);
+		--gap: clamp(3px, 0.3vw, 4.5px);
+		--corner-r: calc(var(--btn-h) * 0.13);
+		--pill-r: calc(var(--btn-h) / 2);
+		--knob-w: calc(var(--btn-h) * 0.88);
+		--label-w: calc(var(--btn-h) * 1.58);
+
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--gap);
+		text-decoration: none;
+		cursor: pointer;
+		user-select: none;
+		-webkit-tap-highlight-color: transparent;
+		transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), filter 0.2s ease;
+	}
+
+	.pill-btn:hover {
+		filter: brightness(1.03);
+		transform: translateY(-1px);
+	}
+
+	.pill-btn:active {
+		transform: translateY(1px);
+		filter: brightness(0.98);
+	}
+
+	.pill-btn:focus-visible {
+		outline: 2px solid rgba(255, 255, 255, 0.5);
+		outline-offset: 5px;
+		border-radius: var(--pill-r);
+	}
+
+	.segment {
+		position: relative;
+		height: var(--btn-h);
+		box-sizing: border-box;
+		background-color: #ceccc8;
+		background-image: linear-gradient(180deg, #d4d2ce 0%, #cbc9c5 45%, #c5c3bf 100%);
+		box-shadow:
+			/* Outer top rim highlight */
+			0 -0.5px 0.5px 0 rgba(255, 255, 255, 0.75),
+			/* Deep diffused inner shadow dipping from top edge */
+			inset 0 calc(var(--btn-h) * 0.18) calc(var(--btn-h) * 0.22) calc(var(--btn-h) * -0.02) rgba(0, 0, 0, 0.52),
+			/* Inset shadow from left edge */
+			inset calc(var(--btn-h) * 0.08) 0 calc(var(--btn-h) * 0.15) -1px rgba(0, 0, 0, 0.35),
+			/* Soft ambient depth */
+			inset 0 calc(var(--btn-h) * 0.3) calc(var(--btn-h) * 0.38) calc(var(--btn-h) * -0.1) rgba(0, 0, 0, 0.2),
+			/* Ambient bottom lift */
+			inset 0 -1.5px 3px 0 rgba(255, 255, 255, 0.28),
+			/* Soft drop shadow into dark background */
+			0 3px 10px rgba(0, 0, 0, 0.45),
+			0 1px 2px rgba(0, 0, 0, 0.3);
+	}
+
+	/* Bright, crisp top rim highlight that sits over the shadow */
+	.segment::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		pointer-events: none;
+		box-shadow:
+			inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.95),
+			inset 0 0 0 0.5px rgba(255, 255, 255, 0.2);
+	}
+
+	.segment-knob {
+		width: var(--knob-w);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		border-radius: var(--pill-r) var(--corner-r) var(--corner-r) var(--pill-r);
+	}
+
+	.segment-label {
+		width: var(--label-w);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--corner-r) var(--pill-r) var(--pill-r) var(--corner-r);
+	}
+
+	.text {
+		position: relative;
+		z-index: 1;
+		color: #5c5b58;
+		font-family: 'Albert Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+		font-size: calc(var(--btn-h) * 0.35);
+		font-weight: 400;
+		letter-spacing: -0.022em;
+		line-height: 1;
+		white-space: nowrap;
+	}
+</style>

@@ -121,8 +121,15 @@ const START = Math.min(2, changes.length);
 
 		.picker-card {
 			animation: picker-stack linear both;
-			animation-timeline: --picker-card;
 			animation-range: cover 0% cover 100%;
+		}
+
+		/*
+		 * Its own, more specific rule on purpose: the build's minifier otherwise folds the
+		 * timeline into the `animation` shorthand, which browsers reject outright.
+		 */
+		.picker-stage .picker-card {
+			animation-timeline: --picker-card;
 		}
 	}
 

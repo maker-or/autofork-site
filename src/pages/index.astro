@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import StarTableSection from '../components/StarTableSection.astro';
+import PillButton from '../components/PillButton.astro';
 
 // Famous repos the fork button cycles through. `size` tunes each mark to look the same weight.
 const logos = [
@@ -21,9 +22,9 @@ const logos = [
 				</h1>
 			</header>
 
-			<a class="fork-btn" href="#fork-section" aria-label={`fork ${logos[0].name}`}>
-				<span class="segment segment-knob" aria-hidden="true">
-					<span class="logo-reel">
+			<div class="fork-cta">
+				<PillButton class="fork-btn" href="#fork-section" label="fork it" aria-label={`fork ${logos[0].name}`}>
+					<span class="logo-reel" slot="knob">
 						{logos.map((logo, i) => (
 							<span
 								class:list={['logo', { 'is-current': i === 0 }]}
@@ -32,11 +33,8 @@ const logos = [
 							></span>
 						))}
 					</span>
-				</span>
-				<span class="segment segment-label">
-					<span class="text">fork it</span>
-				</span>
-			</a>
+				</PillButton>
+			</div>
 		</div>
 
 		<!-- Single bento table with both star fields -->
@@ -93,81 +91,9 @@ const logos = [
 		color: #6f6f6e;
 	}
 
-	/* --- Redesigned Fork Button --- */
-	.fork-btn {
-		--btn-h: clamp(38px, 3.6vw, 54px);
-		--gap: clamp(3px, 0.3vw, 4.5px);
-		--corner-r: calc(var(--btn-h) * 0.13);
-		--pill-r: calc(var(--btn-h) / 2);
-		--knob-w: calc(var(--btn-h) * 0.88);
-		--label-w: calc(var(--btn-h) * 1.58);
-
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		gap: var(--gap);
+	/* The fork button itself lives in PillButton.astro; this is just its spacing */
+	.fork-cta {
 		margin-top: clamp(40px, 6vw, 84px);
-		text-decoration: none;
-		cursor: pointer;
-		user-select: none;
-		-webkit-tap-highlight-color: transparent;
-		transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), filter 0.2s ease;
-	}
-
-	.fork-btn:hover {
-		filter: brightness(1.03);
-		transform: translateY(-1px);
-	}
-
-	.fork-btn:active {
-		transform: translateY(1px);
-		filter: brightness(0.98);
-	}
-
-	.fork-btn:focus-visible {
-		outline: 2px solid rgba(255, 255, 255, 0.5);
-		outline-offset: 5px;
-		border-radius: var(--pill-r);
-	}
-
-	.segment {
-		position: relative;
-		height: var(--btn-h);
-		box-sizing: border-box;
-		background-color: #ceccc8;
-		background-image: linear-gradient(180deg, #d4d2ce 0%, #cbc9c5 45%, #c5c3bf 100%);
-		box-shadow:
-			/* Outer top rim highlight */
-			0 -0.5px 0.5px 0 rgba(255, 255, 255, 0.75),
-			/* Deep diffused inner shadow dipping from top edge */
-			inset 0 calc(var(--btn-h) * 0.18) calc(var(--btn-h) * 0.22) calc(var(--btn-h) * -0.02) rgba(0, 0, 0, 0.52),
-			/* Inset shadow from left edge */
-			inset calc(var(--btn-h) * 0.08) 0 calc(var(--btn-h) * 0.15) -1px rgba(0, 0, 0, 0.35),
-			/* Soft ambient depth */
-			inset 0 calc(var(--btn-h) * 0.3) calc(var(--btn-h) * 0.38) calc(var(--btn-h) * -0.1) rgba(0, 0, 0, 0.2),
-			/* Ambient bottom lift */
-			inset 0 -1.5px 3px 0 rgba(255, 255, 255, 0.28),
-			/* Soft drop shadow into dark background */
-			0 3px 10px rgba(0, 0, 0, 0.45),
-			0 1px 2px rgba(0, 0, 0, 0.3);
-	}
-
-	/* Bright, crisp top rim highlight that sits over the shadow */
-	.segment::before {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: inherit;
-		pointer-events: none;
-		box-shadow:
-			inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.95),
-			inset 0 0 0 0.5px rgba(255, 255, 255, 0.2);
-	}
-
-	.segment-knob {
-		width: var(--knob-w);
-		overflow: hidden;
-		border-radius: var(--pill-r) var(--corner-r) var(--corner-r) var(--pill-r);
 	}
 
 	/* Like NumberFlow's digits: logos ride a strip and fade out at its edges, never overlapping */
@@ -196,26 +122,6 @@ const logos = [
 		opacity: 1;
 	}
 
-	.segment-label {
-		width: var(--label-w);
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: var(--corner-r) var(--pill-r) var(--pill-r) var(--corner-r);
-	}
-
-	.text {
-		position: relative;
-		z-index: 1;
-		color: #5c5b58;
-		font-family: 'Albert Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
-		font-size: calc(var(--btn-h) * 0.35);
-		font-weight: 400;
-		letter-spacing: -0.022em;
-		line-height: 1;
-		white-space: nowrap;
-	}
-
 	@media (max-width: 560px) {
 		.stage {
 			padding: 7vh 20px 14vh;
@@ -225,7 +131,7 @@ const logos = [
 			gap: 0.3em;
 		}
 
-		.fork-btn {
+		.fork-cta {
 			margin-top: clamp(36px, 10vw, 56px);
 		}
 	}
